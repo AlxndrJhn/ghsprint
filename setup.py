@@ -8,7 +8,7 @@ setup(
     author='Alexander Jahn',
     author_email='jahn.alexander@gmail.com',
     url='https://github.com/AlxndrJhn/ghsprint',
-    download_url='https://github.com/AlxndrJhn/ghsprint/archive/v_01.tar.gz',
+    download_url='https://github.com/AlxndrJhn/ghsprint/archive/0.1.tar.gz',
     keywords=['GitHub', 'utilities', 'reporting', 'sprint'],
     install_requires=[
         'requests',
