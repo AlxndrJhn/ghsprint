@@ -14,10 +14,6 @@ setup(
         'requests',
         'urllib3',
     ],
-    entry_points='''
-        [console_scripts]
-        ghsprint=ghsprint:cli:start_sprint
-''',
     classifiers=[
         'Development Status :: 3 - Alpha',
 

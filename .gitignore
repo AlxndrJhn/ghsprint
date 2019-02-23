@@ -5,3 +5,6 @@ __pycache__
 .python-version
 .venv
 GitHubSprint.egg-info
+build
+ghsprint.egg-info
+dist
