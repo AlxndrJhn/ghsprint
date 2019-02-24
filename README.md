@@ -31,6 +31,38 @@ list of columns names to ignore when fetching stories from the project board, se
 
 `-w` or `--week` is the calender week-number, if not given, the current week will be used. Example: `--week 6` will generate the report for the 6th week of the current year.
 
+## Output
+```
+# title1, title2, title3
+
+20. February - 26. February 2019
+
+Velocity: **X**
+
+# Leftover stories from last week
+- reopened [**?(2)**] [**title1**](https://github.com/owner1/repo2/issues/123 ) Judy, Axel
+
+- open [**?(1)**] [**title2**](https://github.com/owner1/repo2/issues/124 ) Tod
+   - PR open CD [repo2 #23 some PR title](https://github.com/owner1/repo2/pull/23 ) Tod
+
+# Stories of the week
+- open [**?(5)**] [**title3**](https://github.com/owner1/repo3/issues/12 ) -
+
+# PRs without issue
+ - PR open CC [repo4 #899 some other PR title](https://github.com/owner1/repo4/pull/899 ) Torsten
+ - PR open A [repo4 #127 another PR title](https://github.com/owner1/repo4/pull/127 ) Bob
+```
+
+### Format and meaning
+- For PRs the letters indicate `C` for changes request, `A` for approved, and `D` for dismissed.
+`- PR open CC` means that two reviewers requested changes and that those reviewers do not yet approve the PR.
+- `[**?(2)**]` means that the story was pokered a 2 ([agile pokering](https://www.mountaingoatsoftware.com/agile/planning-poker)) and the `?`means that it was not repokered in the expected time frame.
+- The names behind the stories are the usernames of the assignees of the story.
+- The name behind the PR is the username of the creator of the PR
+
+## Known issues
+- The review-letters are not well calculated at the moment.
+- Wrong settings (like access-token argument) will silently fail and give no feedback.
 
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.

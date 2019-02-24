@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 setup(
     name='ghsprint',
     packages=['ghsprint'],
-    version='0.3',
+    version='0.1',
     license='GNU GPLv3',
     description='Contains utilities for agile sprints that use the GitHub platform.',
     long_description=long_description,
