@@ -33,10 +33,13 @@ class Issue(object):
         http = 'http'
         if http in line:
             url = http+line.split(http)[-1]
+            url = url.replace(')','')
             number = int(url.split('/')[-1])
             repo = Repo.from_http(url)
             return cls(repo, {'number': number, 'html_url': url})
         elif line.endswith('none'):
+            return None
+        elif '<' in line or '>' in line:
             return None
         else:
             if '#' not in line:
