@@ -53,6 +53,13 @@ class Card(object):
         else:
             return None
 
+    def get_current_value(self):
+        vals = [e.label_val for e in self.events if e.label_val]
+        if len(vals) > 0:
+            return vals[-1]
+        else:
+            return None
+
     def set_issue(self, issue):
         self.issue = issue
 
@@ -60,7 +67,10 @@ class Card(object):
         return any(o.assignee for o in self.events)
 
     def get_assignees(self):
-        assignees = [o.assignee for o in self.events if o.assignee is not None]
+        assignees = list(set([o.assignee for o in self.events if o.assignee is not None]))
+        for name in assignees[::-1]:
+            if any(o.assignee==name and o.event=='unassigned' for o in self.events):
+                assignees.remove(name)
         if len(assignees) == 0:
             assignees = ['-']
         return assignees

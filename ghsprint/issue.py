@@ -34,7 +34,11 @@ class Issue(object):
         if http in line:
             url = http+line.split(http)[-1]
             url = url.replace(')','')
-            number = int(url.split('/')[-1])
+            try:
+                number = int(url.split('/')[-1])
+            except:
+                pass
+                number = -1
             repo = Repo.from_http(url)
             return cls(repo, {'number': number, 'html_url': url})
         elif line.endswith('none'):

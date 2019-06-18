@@ -17,7 +17,7 @@ from .utils import str2date
 
 
 class GithubHelper(object):
-    def __init__(self, access_token: str, repos: List[str], project_id, ignore_columns: str, verbosity=0):
+    def __init__(self, access_token: str, repos: List[str], project_id, ignore_columns: str, keep_columns: str, verbosity=0):
         self.access_token = access_token
         self.headers = {'Accept': 'application/vnd.github.inertia-preview+json'}
 
@@ -31,6 +31,7 @@ class GithubHelper(object):
 
         self.prj_id = project_id
         self.cols_ignore = ignore_columns.split(',')
+        self.cols_keep = keep_columns.split(',')
         self.label2val = {'0': 0, '½': 0.5, '1': 1, '2': 2, '3': 3, '5': 5, '8': 8, '13': 13, '25': 25, '50': 50, '100': 100}
 
     def get_all_projects(self, repo: Repo):

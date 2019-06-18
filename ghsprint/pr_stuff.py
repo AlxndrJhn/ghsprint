@@ -40,9 +40,9 @@ class PR(object):
         return state
 
     def get_review_state(self):
-        if len(self.reviews) == 0:
+        unique_reviewers = list({o.reviewer for o in self.reviews if o.state not in [Review.states.DISMISSED, Review.states.COMMENTED]})
+        if len(unique_reviewers) == 0:
             return '-'
-        unique_reviewers = list({o.reviewer for o in self.reviews if o.state != Review.states.DISMISSED})
         txt = ''
         for reviewer in unique_reviewers:
             latest_review = next(rev for rev in self.reviews[::-1] if rev.reviewer == reviewer)

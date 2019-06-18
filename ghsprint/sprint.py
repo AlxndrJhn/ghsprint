@@ -6,6 +6,7 @@ from time import time
 from typing import List, Tuple, TypeVar
 
 from dateutil.relativedelta import WE, relativedelta
+from tqdm import tqdm
 
 from .board_card import Card
 from .ghdriver import GithubHelper
@@ -15,8 +16,8 @@ nl = '\n'
 
 
 class Sprint(object):
-    def __init__(self, access_token, repos, project_id, ignore_columns, start=None, end=None, week_number=None, verbosity=0):
-        self.ghh = GithubHelper(access_token, repos, project_id, ignore_columns, verbosity=verbosity)
+    def __init__(self, access_token, repos, project_id, ignore_columns, keep_columns, start=None, end=None, week_number=None, verbosity=0):
+        self.ghh = GithubHelper(access_token, repos, project_id, ignore_columns, keep_columns, verbosity=verbosity)
 
         # logging
         self.logger = logging.Logger('sprint')
@@ -69,6 +70,9 @@ class Sprint(object):
     def set_pokered(self, all_cards: List[Card]):
         self.all_pokered_cards = [c for c in all_cards if c.has_label_val_created_within(
             self.date_start, self.date_start+timedelta(hours=8))]
+
+    def set_stale_stories(self, all_cards: List[Card]):
+        self.all_stale_cards = [c for c in all_cards if c.col.name in self.ghh.cols_keep and c not in self.all_pokered_cards and c not in self.all_pokered_leftover]
 
     def set_repokered(self, all_cards: List[Card]):
         self.all_repokered_cards = [c for c in all_cards if c.has_label_val_created_within(
@@ -133,19 +137,21 @@ class Sprint(object):
         self.set_pokered_leftovers(all_cards)
         self.set_pokered(all_cards)
         self.set_repokered(all_cards)
+        self.set_stale_stories(all_cards)
         self.prs = PRs
         self.set_PRs_without_stories(PRs)
 
     def print_report(self):
-        def print_pr(pr):
-            return ' - PR {} {} [{} #{} {}]({} ) {}'.format(pr.get_state(), pr.get_review_state(), pr.repo.name, pr.number, pr.title, pr.url, pr.user_name)
+        def print_pr(pr, print_user):
+            user = pr.user_name if print_user else ''
+            return ' - PR {} {} [{} #{} {}]({} ) {}'.format(pr.get_state(), pr.get_review_state(), pr.repo.name, pr.number, pr.title, pr.url, user)
 
         def print_story(story):
             txt = ''
             leftover = story.get_pokered_value(
                 self.date_start-timedelta(days=1), self.date_start)
             poker = story.get_pokered_value(
-                self.date_start, self.date_start+timedelta(hours=8))
+                self.date_start, self.date_start+timedelta(hours=8)) or story.get_current_value()
             repoker = story.get_pokered_value(
                 self.date_end-timedelta(hours=5), self.date_end) or '?'
             poker_repoker = '{}({})'.format(repoker, poker or leftover)
@@ -164,7 +170,7 @@ class Sprint(object):
                     pr = self.ghh.get_pr(pr_event.source_repo, pr_event.source_number)
                 else:
                     pr = prs[0]
-                pr_block.append('  ' + print_pr(pr))
+                pr_block.append('  ' + print_pr(pr, print_user=False))
             if len(pr_block) > 0:
                 txt += nl
                 txt += nl.join(pr_block)
@@ -188,23 +194,28 @@ class Sprint(object):
         rprt.append('')
 
         # Stories
-        if len(self.all_pokered_leftover) > 0:
+        if self.all_pokered_leftover:
             rprt.append('# Leftover stories from last week')
             for story in self.all_pokered_leftover:
                 rprt.append(print_story(story))
                 rprt.append('')
 
-        rprt.append('# Stories of the week')
-        for story in self.all_pokered_cards:
-            rprt.append(print_story(story))
-            rprt.append('')
+        if self.all_pokered_cards:
+            rprt.append('# Stories of the week')
+            for story in self.all_pokered_cards:
+                rprt.append(print_story(story))
+                rprt.append('')
+
+        if self.all_stale_cards:
+            rprt.append('# Unchanged stories')
+            for story in self.all_stale_cards:
+                rprt.append(print_story(story))
+                rprt.append('')
 
         # PRs without story:
-        rprt.append('# PRs without issue')
-        for pr in self.PRs_without_issues:
-            rprt.append(print_pr(pr))
-
-        # - [**no-poker**] [**pseudonymize users local folder when using labelImg**](https://github.com/fedger/menu-service/issues/257)
-        #   - PR [#118](https://github.com/fedger/labelImg/pull/118)
+        if self.PRs_without_issues:
+            rprt.append('# PRs without issue')
+            for pr in self.PRs_without_issues:
+                rprt.append(print_pr(pr, print_user=True))
 
         return nl.join(rprt)
