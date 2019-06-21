@@ -53,7 +53,7 @@ class GithubHelper(object):
         return []
 
     def get_all_cards(self, col: Column) -> List[Card]:
-        url = 'https://api.github.com/projects/columns/{}/cards?access_token={}'.format(col.id, self.access_token)
+        url = 'https://api.github.com/projects/columns/{}/cards?access_token={}&per_page=100'.format(col.id, self.access_token)
         r = requests_retry_session().get(url, headers=self.headers)
         if r.status_code == 200:
             return [Card(col, card) for card in r.json()]
@@ -75,7 +75,7 @@ class GithubHelper(object):
         events = []
         for repo in self.repos:
             interesting_event_types = ['labeled', 'unlabeled', 'reopened', 'closed', 'assigned', 'cross-referenced']
-            url = 'https://api.github.com/repos/{}/{}/issues/{}/timeline?access_token={}'.format(repo.owner, repo.name, issue_num, self.access_token)
+            url = 'https://api.github.com/repos/{}/{}/issues/{}/timeline?access_token={}&per_page=100'.format(repo.owner, repo.name, issue_num, self.access_token)
             header = {'Accept': 'application/vnd.github.mockingbird-preview'}
             r = requests_retry_session().get(url, headers=header)
 
@@ -105,7 +105,7 @@ class GithubHelper(object):
     def get_all_issues(self) -> List[Issue]:
         rlist = []
         for repo in self.repos:
-            url = 'https://api.github.com/repos/{}/{}/issues?access_token={}'.format(
+            url = 'https://api.github.com/repos/{}/{}/issues?access_token={}&per_page=100'.format(
                 repo.owner,
                 repo.name,
                 self.access_token)
@@ -135,7 +135,7 @@ class GithubHelper(object):
     def get_all_PRs(self) -> List[PR]:
         pull_requests = []
         for repo in self.repos:
-            url = 'https://api.github.com/repos/{}/{}/pulls?access_token={}'.format(
+            url = 'https://api.github.com/repos/{}/{}/pulls?access_token={}&per_page=100'.format(
                 repo.owner,
                 repo.name,
                 self.access_token)
@@ -167,7 +167,7 @@ class GithubHelper(object):
 
     def fetch_PR_reviews(self, pr: PR) -> List[Review]:
         # GET /repos/:owner/:repo/pulls/:number/reviews
-        url = 'https://api.github.com/repos/{}/{}/pulls/{}/reviews?access_token={}'.format(
+        url = 'https://api.github.com/repos/{}/{}/pulls/{}/reviews?access_token={}&per_page=100'.format(
             pr.repo.owner,
             pr.repo.name,
             pr.number,
