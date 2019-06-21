@@ -16,7 +16,7 @@ from .utils import str2date
 
 
 class GithubHelper(object):
-    def __init__(self, access_token: str, repos: List[str], project_name: str, ignore_columns: str, keep_columns: str, login_name_mapper: str, verbosity=0):
+    def __init__(self, access_token: str, repos: List[str], project_name: str, ignore_columns: str, keep_columns: str, login_name_mapper: str, special_tags: str, verbosity=0):
         self.access_token = access_token
         self.headers = {'Accept': 'application/vnd.github.inertia-preview+json'}
 
@@ -34,7 +34,7 @@ class GithubHelper(object):
 
         self.login_name_mapper = dict(entry.split(':') for entry in login_name_mapper.split(','))
         self.login_name_mapper = {k.lower(): v for k, v in self.login_name_mapper.items()}
-
+        self.special_tags = special_tags.split(',')
         self.label2val = {'0': 0, '½': 0.5, '1': 1, '2': 2, '3': 3, '5': 5, '8': 8, '13': 13, '25': 25, '50': 50, '100': 100}
 
     def get_all_projects(self, repo: Repo):
@@ -150,6 +150,20 @@ class GithubHelper(object):
                 for pr_dict in r.json():
                     pull_requests.append(PR(repo, pr_dict))
         return pull_requests
+
+    def fetch_PR_data(self, pr: PR) -> List[Review]:
+        # GET /repos/:owner/:repo/pulls/:number/reviews
+        url = 'https://api.github.com/repos/{}/{}/pulls/{}?access_token={}'.format(
+            pr.repo.owner,
+            pr.repo.name,
+            pr.number,
+            self.access_token)
+
+        r = requests_retry_session().get(url, headers=self.headers)
+
+        if r.status_code == 200:
+            return r.json()
+        return None
 
     def fetch_PR_reviews(self, pr: PR) -> List[Review]:
         # GET /repos/:owner/:repo/pulls/:number/reviews

@@ -19,6 +19,7 @@ class Issue(object):
         self.title = issue_dict.get('title', None)
         self.url = issue_dict.get('html_url', None)
         self.assignees = issue_dict.get('assignees', [])
+        self.labels = issue_dict.get('labels', [])
         state_string = issue_dict.get('state', None)
         self.state = None
         if state_string:

@@ -18,8 +18,8 @@ nl = '\n'
 
 
 class Sprint(object):
-    def __init__(self, access_token, repos, project_name, ignore_columns, keep_columns, login_name_mapper='', start=None, end=None, week_number=None, verbosity=0):
-        self.ghh = GithubHelper(access_token, repos, project_name, ignore_columns, keep_columns, login_name_mapper=login_name_mapper, verbosity=verbosity)
+    def __init__(self, access_token, repos, project_name, ignore_columns, keep_columns, login_name_mapper='', start=None, end=None, week_number=None, special_tags='', verbosity=0):
+        self.ghh = GithubHelper(access_token, repos, project_name, ignore_columns, keep_columns, login_name_mapper=login_name_mapper, special_tags=special_tags, verbosity=verbosity)
 
         # logging
         self.logger = logging.Logger('sprint')
@@ -137,8 +137,16 @@ class Sprint(object):
                     pbar.set_description(f'Fetched PR reviews for #{pr.number}')
                     pr.add_reviews(revs)
                     pbar.update()
-
         self.logger.info('time for PR reviews:\t{:.1f}s'.format(time() - start))
+
+        start = time()
+        with tqdm(total=len(pull_requests)) as pbar:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+                for pr, data in zip(pull_requests, executor.map(self.ghh.fetch_PR_data, pull_requests)):
+                    pbar.set_description(f'Fetched PR data for #{pr.number}')
+                    pr.update(data)
+                    pbar.update()
+        self.logger.info('time for PR data:\t{:.1f}s'.format(time() - start))
 
         # get all events
         start = time()
@@ -171,10 +179,19 @@ class Sprint(object):
         self.prs = pull_requests
         self.set_PRs_without_stories(pull_requests)
 
+    def get_all_stories(self):
+        return self.all_pokered_cards + self.all_pokered_leftover + self.all_stale_cards + self.all_repokered_cards
+
     def print_report(self):
         def print_pr(pr, print_user):
             user = pr.user_name if print_user else ''
-            return f' - PR {pr.get_state()} (Reviews: {pr.get_review_state(self.ghh.login_name_mapper)}) [{pr.repo.name} #{pr.number} {pr.title}]({pr.url} ) {user}'
+            special_tags = [tag for tag in pr.labels if tag['name'] in self.ghh.special_tags]
+            special_tags_str = ''
+            if special_tags:
+                special_tags_str = ', '.join(f'[**{tag["name"]}**]' for tag in special_tags) + ', '
+            return f' - PR {pr.get_state()} [{pr.repo.name} #{pr.number} {pr.title}]({pr.url} ) {user}\n' + \
+                   f'      - {special_tags_str}+{pr.additions}, -{pr.deletions}, files changed: {pr.changed_files}\n' + \
+                   f'      - Reviews: {pr.get_review_state(self.ghh.login_name_mapper)}'
 
         def print_story(story):
             txt = ''
@@ -185,8 +202,10 @@ class Sprint(object):
             repoker = story.get_pokered_value(
                 self.date_end-timedelta(hours=5), self.date_end) or '?'
             poker_repoker = '{}({})'.format(repoker, poker or leftover)
-            txt += '- {} [**{}**] [**{}**]({} ) {}'.format(
+            special_tags = ' ' + ', '.join(f'[**{tag["name"]}**]' for tag in story.issue.labels if tag['name'] in self.ghh.special_tags)
+            txt += '- {}{} [**{}**] [**{}**]({} ) {}'.format(
                 story.get_state(),
+                special_tags,
                 poker_repoker,
                 story.issue.title.strip(),
                 story.issue.url,
@@ -209,8 +228,8 @@ class Sprint(object):
         # report list, will be joined at the end with newline character
         rprt = []
 
-        # title
-        all_titles = '. '.join([c.issue.title.strip() for c in self.all_pokered_cards + self.all_pokered_leftover + self.all_stale_cards + self.all_repokered_cards])
+        # title by using word frequency
+        all_titles = '. '.join([c.issue.title.strip() for c in self.get_all_stories()])
         r = Rake()
         r.extract_keywords_from_text(all_titles)
         word_degs = r.get_word_degrees()

@@ -35,6 +35,13 @@ class PR(object):
     def add_reviews(self, revs):
         self.reviews = revs
 
+    def update(self, data):
+        self.deletions = data['deletions']
+        self.additions = data['additions']
+        self.changed_files = data['changed_files']
+        self.labels = data['labels']
+        self.is_draft = data['mergeable_state'] == 'draft'
+
     def get_state(self):
         state = str(self.state.name)
         if self.merged_at:
