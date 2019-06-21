@@ -1,5 +1,7 @@
 from enum import Enum
 
+from typing import Dict
+
 from .issue import Issue, states
 from .repo_stuff import Repo
 from .utils import str2date
@@ -33,21 +35,30 @@ class PR(object):
     def add_reviews(self, revs):
         self.reviews = revs
 
+    def update(self, data):
+        self.deletions = data['deletions']
+        self.additions = data['additions']
+        self.changed_files = data['changed_files']
+        self.labels = data['labels']
+        self.is_draft = data['mergeable_state'] == 'draft'
+
     def get_state(self):
         state = str(self.state.name)
         if self.merged_at:
             state = 'merged'
         return state
 
-    def get_review_state(self):
-        if len(self.reviews) == 0:
-            return '-'
-        unique_reviewers = list({o.reviewer for o in self.reviews if o.state != Review.states.DISMISSED})
-        txt = ''
+    def get_review_state(self, login_to_name_mapping: Dict[str, str]={}):
+        ignore_states = [Review.states.DISMISSED, Review.states.COMMENTED]
+        unique_reviewers = list({o.reviewer for o in self.reviews if o.state not in ignore_states})
+        if len(unique_reviewers) == 0:
+            return 'not reviewed'
+        txt = []
         for reviewer in unique_reviewers:
-            latest_review = next(rev for rev in self.reviews[::-1] if rev.reviewer == reviewer)
-            txt += str(latest_review.state.name)[0].upper()
-        return txt
+            latest_review = next(rev for rev in self.reviews[::-1] if rev.reviewer == reviewer and rev.state not in ignore_states)
+            mapped_reviewer_name = login_to_name_mapping.get(reviewer.lower(), reviewer)
+            txt.append(f'{mapped_reviewer_name} > {latest_review.state.name.lower().replace("_", " ")}')
+        return ', '.join(txt)
 
 
 class Review(object):

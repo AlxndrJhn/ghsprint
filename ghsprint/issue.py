@@ -18,6 +18,8 @@ class Issue(object):
         self.number = issue_dict.get('number', None)
         self.title = issue_dict.get('title', None)
         self.url = issue_dict.get('html_url', None)
+        self.assignees = issue_dict.get('assignees', [])
+        self.labels = issue_dict.get('labels', [])
         state_string = issue_dict.get('state', None)
         self.state = None
         if state_string:
@@ -33,10 +35,17 @@ class Issue(object):
         http = 'http'
         if http in line:
             url = http+line.split(http)[-1]
-            number = int(url.split('/')[-1])
+            url = url.replace(')','')
+            try:
+                number = int(url.split('/')[-1])
+            except:
+                pass
+                number = -1
             repo = Repo.from_http(url)
             return cls(repo, {'number': number, 'html_url': url})
         elif line.endswith('none'):
+            return None
+        elif '<' in line or '>' in line:
             return None
         else:
             if '#' not in line:

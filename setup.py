@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 setup(
     name='ghsprint',
     packages=['ghsprint'],
-    version='0.2',
+    version='0.3',
     license='GNU GPLv3',
     description='Contains utilities for agile sprints that use the GitHub platform.',
     long_description=long_description,
@@ -19,6 +19,7 @@ setup(
     install_requires=[
         'requests',
         'urllib3',
+        'rake-nltk',
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',

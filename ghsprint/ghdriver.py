@@ -5,19 +5,18 @@ from datetime import date, datetime, timedelta
 from time import time
 from typing import Dict, List, Tuple, TypeVar
 
-import requests
-
 from .board_card import Card
 from .board_stuff import Column
 from .issue import Issue
 from .issue_event import Event
 from .pr_stuff import PR, Review
 from .repo_stuff import Commit, Repo
+from .request_session import requests_retry_session
 from .utils import str2date
 
 
 class GithubHelper(object):
-    def __init__(self, access_token: str, repos: List[str], project_id, ignore_columns: str, verbosity=0):
+    def __init__(self, access_token: str, repos: List[str], project_name: str, ignore_columns: str, keep_columns: str, login_name_mapper: str, special_tags: str, verbosity=0):
         self.access_token = access_token
         self.headers = {'Accept': 'application/vnd.github.inertia-preview+json'}
 
@@ -29,25 +28,33 @@ class GithubHelper(object):
 
         self.repos = [Repo(x[0], x[1]) for x in (x.split("/") for x in repos) if x[1] != 5]
 
-        self.prj_id = project_id
+        self.project_name = project_name
         self.cols_ignore = ignore_columns.split(',')
+        self.cols_keep = keep_columns.split(',')
+
+        self.login_name_mapper = dict(entry.split(':') for entry in login_name_mapper.split(','))
+        self.login_name_mapper = {k.lower(): v for k, v in self.login_name_mapper.items()}
+        self.special_tags = special_tags.split(',')
         self.label2val = {'0': 0, '½': 0.5, '1': 1, '2': 2, '3': 3, '5': 5, '8': 8, '13': 13, '25': 25, '50': 50, '100': 100}
 
     def get_all_projects(self, repo: Repo):
         url = 'https://api.github.com/repos/{}/{}/projects?access_token={}'.format(repo.owner, repo.name, self.access_token)
-        r = requests.get(url, headers=self.headers)
-        return r.json()
+        r = requests_retry_session().get(url, headers=self.headers)
+        if r.status_code == 200:
+            return r.json()
+        else:
+            raise RuntimeError(f'Connection error fetching projects for {repo}')
 
     def get_all_columns(self) -> List[Column]:
-        url = 'https://api.github.com/projects/{}/columns?access_token={}'.format(self.prj_id, self.access_token)
-        r = requests.get(url, headers=self.headers)
+        url = 'https://api.github.com/projects/{}/columns?access_token={}'.format(self.project_id, self.access_token)
+        r = requests_retry_session().get(url, headers=self.headers)
         if r.status_code == 200:
-            return [Column(self.prj_id, col) for col in r.json() if col['name'] not in self.cols_ignore]
+            return [Column(self.project_id, col) for col in r.json() if col['name'] not in self.cols_ignore]
         return []
 
     def get_all_cards(self, col: Column) -> List[Card]:
-        url = 'https://api.github.com/projects/columns/{}/cards?access_token={}'.format(col.id, self.access_token)
-        r = requests.get(url, headers=self.headers)
+        url = 'https://api.github.com/projects/columns/{}/cards?access_token={}&per_page=100'.format(col.id, self.access_token)
+        r = requests_retry_session().get(url, headers=self.headers)
         if r.status_code == 200:
             return [Card(col, card) for card in r.json()]
         return []
@@ -58,7 +65,7 @@ class GithubHelper(object):
             issue.repo,
             issue.number,
             self.access_token)
-        r = requests.get(url, headers=self.headers)
+        r = requests_retry_session().get(url, headers=self.headers)
 
         if r.status_code == 200:
             return [lab['name'] for lab in r.json() if lab['name'] in self.import_label_types]
@@ -68,9 +75,9 @@ class GithubHelper(object):
         events = []
         for repo in self.repos:
             interesting_event_types = ['labeled', 'unlabeled', 'reopened', 'closed', 'assigned', 'cross-referenced']
-            url = 'https://api.github.com/repos/{}/{}/issues/{}/timeline?access_token={}'.format(repo.owner, repo.name, issue_num, self.access_token)
+            url = 'https://api.github.com/repos/{}/{}/issues/{}/timeline?access_token={}&per_page=100'.format(repo.owner, repo.name, issue_num, self.access_token)
             header = {'Accept': 'application/vnd.github.mockingbird-preview'}
-            r = requests.get(url, headers=header)
+            r = requests_retry_session().get(url, headers=header)
 
             if r.status_code == 200:
 
@@ -86,7 +93,7 @@ class GithubHelper(object):
             url = 'https://api.github.com/orgs/{}/repos?access_token={}'.format(
                 repo.owner,
                 self.access_token)
-            r = requests.get(url, headers=self.headers)
+            r = requests_retry_session().get(url, headers=self.headers)
 
             if r.status_code == 200:
                 for repo in r.json():
@@ -98,11 +105,11 @@ class GithubHelper(object):
     def get_all_issues(self) -> List[Issue]:
         rlist = []
         for repo in self.repos:
-            url = 'https://api.github.com/repos/{}/{}/issues?access_token={}'.format(
+            url = 'https://api.github.com/repos/{}/{}/issues?access_token={}&per_page=100'.format(
                 repo.owner,
                 repo.name,
                 self.access_token)
-            r = requests.get(url, headers=self.headers)
+            r = requests_retry_session().get(url, headers=self.headers)
 
             if r.status_code == 200:
                 for issue_dict in r.json():
@@ -116,7 +123,7 @@ class GithubHelper(object):
             repo.name,
             pr_num,
             self.access_token)
-        r = requests.get(url, headers=self.headers)
+        r = requests_retry_session().get(url, headers=self.headers)
 
         if r.status_code == 200:
             pr = PR(repo, r.json())
@@ -126,9 +133,9 @@ class GithubHelper(object):
         raise ValueError('invalid PR request for {}/{} #{}'.format(repo.owner, repo.name, pr_num))
 
     def get_all_PRs(self) -> List[PR]:
-        PRs = []
+        pull_requests = []
         for repo in self.repos:
-            url = 'https://api.github.com/repos/{}/{}/pulls?access_token={}'.format(
+            url = 'https://api.github.com/repos/{}/{}/pulls?access_token={}&per_page=100'.format(
                 repo.owner,
                 repo.name,
                 self.access_token)
@@ -137,22 +144,36 @@ class GithubHelper(object):
                 'sort': 'updated',
                 'direction': 'desc'
             }
-            r = requests.get(url, headers=self.headers, data=params)
+            r = requests_retry_session().get(url, headers=self.headers, data=params)
 
             if r.status_code == 200:
                 for pr_dict in r.json():
-                    PRs.append(PR(repo, pr_dict))
-        return PRs
+                    pull_requests.append(PR(repo, pr_dict))
+        return pull_requests
 
-    def fetch_PR_reviews(self, pr: PR) -> List[Review]:
+    def fetch_PR_data(self, pr: PR) -> List[Review]:
         # GET /repos/:owner/:repo/pulls/:number/reviews
-        url = 'https://api.github.com/repos/{}/{}/pulls/{}/reviews?access_token={}'.format(
+        url = 'https://api.github.com/repos/{}/{}/pulls/{}?access_token={}'.format(
             pr.repo.owner,
             pr.repo.name,
             pr.number,
             self.access_token)
 
-        r = requests.get(url, headers=self.headers)
+        r = requests_retry_session().get(url, headers=self.headers)
+
+        if r.status_code == 200:
+            return r.json()
+        return None
+
+    def fetch_PR_reviews(self, pr: PR) -> List[Review]:
+        # GET /repos/:owner/:repo/pulls/:number/reviews
+        url = 'https://api.github.com/repos/{}/{}/pulls/{}/reviews?access_token={}&per_page=100'.format(
+            pr.repo.owner,
+            pr.repo.name,
+            pr.number,
+            self.access_token)
+
+        r = requests_retry_session().get(url, headers=self.headers)
 
         if r.status_code == 200:
             revs = []
@@ -169,7 +190,7 @@ class GithubHelper(object):
             card.issue_num,
             self.access_token)
 
-        r = requests.get(url, headers=self.headers)
+        r = requests_retry_session().get(url, headers=self.headers)
 
         if r.status_code == 200:
             return Issue(card.repo, r.json())
@@ -183,7 +204,7 @@ class GithubHelper(object):
             repo.name,
             self.access_token)
 
-        r = requests.get(url, headers=self.headers)
+        r = requests_retry_session().get(url, headers=self.headers)
 
         if r.status_code == 200:
             prod_tag = [r for r in r.json() if 'refs/tags/{}'.format(ref)
@@ -198,7 +219,7 @@ class GithubHelper(object):
             repo.owner,
             repo.name,
             self.access_token)
-        r = requests.get(url, headers=self.headers)
+        r = requests_retry_session().get(url, headers=self.headers)
         if r.status_code == 200:
             master_ref = [r for r in r.json() if 'master' in r['ref']][0]
             commit_sha = master_ref['object']['sha']
@@ -213,7 +234,7 @@ class GithubHelper(object):
             base,
             head,
             self.access_token)
-        r = requests.get(url, headers=self.headers)
+        r = requests_retry_session().get(url, headers=self.headers)
 
         if r.status_code == 200:
             cmp = r.json()
