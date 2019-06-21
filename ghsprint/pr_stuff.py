@@ -42,12 +42,13 @@ class PR(object):
         return state
 
     def get_review_state(self, login_to_name_mapping: Dict[str, str]={}):
-        unique_reviewers = list({o.reviewer for o in self.reviews if o.state not in [Review.states.DISMISSED, Review.states.COMMENTED]})
+        ignore_states = [Review.states.DISMISSED, Review.states.COMMENTED]
+        unique_reviewers = list({o.reviewer for o in self.reviews if o.state not in ignore_states})
         if len(unique_reviewers) == 0:
             return 'not reviewed'
         txt = []
         for reviewer in unique_reviewers:
-            latest_review = next(rev for rev in self.reviews[::-1] if rev.reviewer == reviewer)
+            latest_review = next(rev for rev in self.reviews[::-1] if rev.reviewer == reviewer and rev.state not in ignore_states)
             mapped_reviewer_name = login_to_name_mapping.get(reviewer.lower(), reviewer)
             txt.append(f'{mapped_reviewer_name} > {latest_review.state.name.lower().replace("_", " ")}')
         return ', '.join(txt)
