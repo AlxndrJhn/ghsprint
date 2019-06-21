@@ -1,5 +1,7 @@
 from enum import Enum
 
+from typing import Dict
+
 from .issue import Issue, states
 from .repo_stuff import Repo
 from .utils import str2date
@@ -39,15 +41,16 @@ class PR(object):
             state = 'merged'
         return state
 
-    def get_review_state(self):
+    def get_review_state(self, login_to_name_mapping: Dict[str, str]={}):
         unique_reviewers = list({o.reviewer for o in self.reviews if o.state not in [Review.states.DISMISSED, Review.states.COMMENTED]})
         if len(unique_reviewers) == 0:
-            return '-'
-        txt = ''
+            return 'not reviewed'
+        txt = []
         for reviewer in unique_reviewers:
             latest_review = next(rev for rev in self.reviews[::-1] if rev.reviewer == reviewer)
-            txt += str(latest_review.state.name)[0].upper()
-        return txt
+            mapped_reviewer_name = login_to_name_mapping.get(reviewer.lower(), reviewer)
+            txt.append(f'{mapped_reviewer_name} > {latest_review.state.name.lower().replace("_", " ")}')
+        return ', '.join(txt)
 
 
 class Review(object):

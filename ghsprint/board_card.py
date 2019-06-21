@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Dict
 
 from .board_stuff import Column
 from .issue_event import Event
@@ -66,11 +66,10 @@ class Card(object):
     def was_assigned(self):
         return any(o.assignee for o in self.events)
 
-    def get_assignees(self):
-        assignees = list(set([o.assignee for o in self.events if o.assignee is not None]))
-        for name in assignees[::-1]:
-            if any(o.assignee==name and o.event=='unassigned' for o in self.events):
-                assignees.remove(name)
-        if len(assignees) == 0:
-            assignees = ['-']
-        return assignees
+    def get_assignees(self, login_to_name_mapping: Dict[str, str]={}):
+        assignees = []
+        for user in self.issue.assignees:
+            user_name = login_to_name_mapping.get(user['login'].lower(), user['login'])
+            assignees.append(user_name)
+
+        return assignees or ['not assigned']

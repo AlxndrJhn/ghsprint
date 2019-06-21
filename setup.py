@@ -19,6 +19,7 @@ setup(
     install_requires=[
         'requests',
         'urllib3',
+        'rake-nltk',
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',

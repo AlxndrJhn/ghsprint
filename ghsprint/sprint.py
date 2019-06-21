@@ -6,7 +6,9 @@ from time import time
 from typing import List, Tuple, TypeVar
 
 from dateutil.relativedelta import WE, relativedelta
+from rake_nltk import Rake
 from tqdm import tqdm
+from gensim.summarization.summarizer import summarize
 
 from .board_card import Card
 from .ghdriver import GithubHelper
@@ -16,19 +18,12 @@ nl = '\n'
 
 
 class Sprint(object):
-    def __init__(self, access_token, repos, project_id, ignore_columns, keep_columns, start=None, end=None, week_number=None, verbosity=0):
-        self.ghh = GithubHelper(access_token, repos, project_id, ignore_columns, keep_columns, verbosity=verbosity)
+    def __init__(self, access_token, repos, project_name, ignore_columns, keep_columns, login_name_mapper='', start=None, end=None, week_number=None, verbosity=0):
+        self.ghh = GithubHelper(access_token, repos, project_name, ignore_columns, keep_columns, login_name_mapper=login_name_mapper, verbosity=verbosity)
 
         # logging
         self.logger = logging.Logger('sprint')
-        if verbosity >= 3:
-            self.logger.setLevel(logging.DEBUG)
-        elif verbosity >= 2:
-            self.logger.setLevel(logging.INFO)
-        elif verbosity >= 1:
-            self.logger.setLevel(logging.WARNING)
-        elif verbosity <= 0:
-            self.logger.setLevel(logging.ERROR)
+        self.logger.setLevel(logging.INFO)
 
         format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         formatter = logging.Formatter(format)
@@ -71,7 +66,7 @@ class Sprint(object):
         self.all_pokered_cards = [c for c in all_cards if c.has_label_val_created_within(
             self.date_start, self.date_start+timedelta(hours=8))]
 
-    def set_stale_stories(self, all_cards: List[Card]):
+    def set_unchanged_stories(self, all_cards: List[Card]):
         self.all_stale_cards = [c for c in all_cards if c.col.name in self.ghh.cols_keep and c not in self.all_pokered_cards and c not in self.all_pokered_leftover]
 
     def set_repokered(self, all_cards: List[Card]):
@@ -81,6 +76,7 @@ class Sprint(object):
     def set_PRs_without_stories(self, all_PRs):
         self.PRs_without_issues = [pr for pr in all_PRs if len(pr.closes) == 0 and self.date_start < pr.created_at < self.date_end]
 
+
     def fetch_all_data(self):
         start_0 = time()
         # to know that is in not yet in production
@@ -89,62 +85,96 @@ class Sprint(object):
         # compare = self.ghh.compare_commits(prod_sha, master_sha)
         # self.logger.info('time for production tag difference:\t{:.1f}s'.format(time() - start_0))
 
-        # PRs
+        # get project_id
         start = time()
-        PRs = self.ghh.get_all_PRs()
-        self.logger.info('time for PRs:\t{:.1f}s'.format(time() - start))
+        found_matching_name = False
+        with tqdm(total=len(self.ghh.repos)) as pbar:
+            for repo in self.ghh.repos:
+                pbar.set_description(f'Checking {repo.owner}/{repo.name}')
+                prjs = self.ghh.get_all_projects(repo)
+                for project in prjs:
+                    if self.ghh.project_name.lower() == project['name'].lower():
+                        self.ghh.project_id = project['id']
+                        found_matching_name = True
+                        pbar.update(len(self.ghh.repos)-pbar.n)
+                        break
+                if found_matching_name:
+                    break
+                pbar.update()
+        if not found_matching_name:
+            raise RuntimeError(f'No suitable project called "{self.ghh.project_name}" found in {self.ghh.repos}')
+        self.logger.info('time for getting project id:\t{:.1f}s'.format(time() - start))
 
-        start = time()
-        # for pr in PRs:
-        #    pr.add_reviews(fetch_PR_reviews(pr.number))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-            for pr, revs in zip(PRs, executor.map(self.ghh.fetch_PR_reviews, PRs)):
-                pr.add_reviews(revs)
-        self.logger.info('time for PR reviews:\t{:.1f}s'.format(time() - start))
-
+        # get all columns in project
         start = time()
         cols = self.ghh.get_all_columns()
         self.logger.info('time for board columns:\t{:.1f}s'.format(time() - start))
+
+        # get all cards from board and columns
         all_cards = []
         start = time()
-        # for col in cols:
-        #    col_cards = get_all_cards(col)
-        #    all_cards.extend(col_cards)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-            for col, cards in zip(cols, executor.map(self.ghh.get_all_cards, cols)):
-                all_cards.extend(cards)
-                # self.logger.info('{}\t{}'.format(col.name, len(cards)))
+        with tqdm(total=len(cols)) as pbar:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+                for col, cards in zip(cols, executor.map(self.ghh.get_all_cards, cols)):
+                    pbar.set_description(f'Fetched cards for {col.name}')
+                    all_cards.extend(cards)
+                    pbar.update()
+
         self.logger.info('time for all board cards:\t{:.1f}s'.format(time() - start))
 
+        # recognize related repos, add it to config
+        self.ghh.repos = self.ghh.repos + list(set(c.repo for c in all_cards if c.repo != None and c.repo not in self.ghh.repos))
+
+        # PRs
         start = time()
-        cards_with_issues = [c for c in all_cards if c.has_issue]
-        # for c in cards_with_issues:
-        #     c.set_events(get_all_events(c.issue_num))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-            for card, events in zip(cards_with_issues, executor.map(self.ghh.get_all_events, [c.issue_num for c in cards_with_issues])):
-                card.set_events(events)
-        self.logger.info('time for all board card events:\t{:.1f}s'.format(time() - start))
+        pull_requests = self.ghh.get_all_PRs()
+        self.logger.info('time for PRs:\t{:.1f}s'.format(time() - start))
 
         start = time()
-        # for c in cards_with_issues:
-        #     c.set_issue(get_single_issue(c.issue_num))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-            for card, issue in zip(cards_with_issues, executor.map(self.ghh.get_single_issue_from_card, cards_with_issues)):
-                card.set_issue(issue)
+        with tqdm(total=len(pull_requests)) as pbar:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+                for pr, revs in zip(pull_requests, executor.map(self.ghh.fetch_PR_reviews, pull_requests)):
+                    pbar.set_description(f'Fetched PR reviews for #{pr.number}')
+                    pr.add_reviews(revs)
+                    pbar.update()
+
+        self.logger.info('time for PR reviews:\t{:.1f}s'.format(time() - start))
+
+        # get all events
+        start = time()
+        cards_with_issues = [c for c in all_cards if c.has_issue]
+        with tqdm(total=len(cards_with_issues)) as pbar:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+                for card, events in zip(cards_with_issues, executor.map(self.ghh.get_all_events, [c.issue_num for c in cards_with_issues])):
+                    pbar.set_description(f'Fetched events for #{card.id}')
+                    card.set_events(events)
+                    pbar.update()
+        self.logger.info('time for all board card events:\t{:.1f}s'.format(time() - start))
+
+        # issue data
+        start = time()
+        with tqdm(total=len(cards_with_issues)) as pbar:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+                for card, issue in zip(cards_with_issues, executor.map(self.ghh.get_single_issue_from_card, cards_with_issues)):
+                    pbar.set_description(f'Fetched issue data for #{card.id}')
+                    card.set_issue(issue)
+                    pbar.update()
         self.logger.info('time for all board card issues:\t{:.1f}s'.format(time() - start))
+
+        # total
         self.logger.info('total time:\t{:.1f}s'.format(time() - start_0))
 
         self.set_pokered_leftovers(all_cards)
         self.set_pokered(all_cards)
         self.set_repokered(all_cards)
-        self.set_stale_stories(all_cards)
-        self.prs = PRs
-        self.set_PRs_without_stories(PRs)
+        self.set_unchanged_stories(all_cards)
+        self.prs = pull_requests
+        self.set_PRs_without_stories(pull_requests)
 
     def print_report(self):
         def print_pr(pr, print_user):
             user = pr.user_name if print_user else ''
-            return ' - PR {} {} [{} #{} {}]({} ) {}'.format(pr.get_state(), pr.get_review_state(), pr.repo.name, pr.number, pr.title, pr.url, user)
+            return f' - PR {pr.get_state()} (Reviews: {pr.get_review_state(self.ghh.login_name_mapper)}) [{pr.repo.name} #{pr.number} {pr.title}]({pr.url} ) {user}'
 
         def print_story(story):
             txt = ''
@@ -160,7 +190,7 @@ class Sprint(object):
                 poker_repoker,
                 story.issue.title.strip(),
                 story.issue.url,
-                ', '.join(story.get_assignees())
+                ', '.join(story.get_assignees(self.ghh.login_name_mapper))
             )
             pr_block = []
             for pr_event in [ev for ev in story.events if ev.source_is_pr]:
@@ -180,8 +210,12 @@ class Sprint(object):
         rprt = []
 
         # title
-        all_titles = [c.issue.title.strip() for c in self.all_pokered_cards]
-        rprt.append('# '+', '.join(all_titles))
+        all_titles = '. '.join([c.issue.title.strip() for c in self.all_pokered_cards + self.all_pokered_leftover + self.all_stale_cards + self.all_repokered_cards])
+        r = Rake()
+        r.extract_keywords_from_text(all_titles)
+        word_degs = r.get_word_degrees()
+        sorted_tuples = sorted(word_degs.items(), key=lambda item: item[1], reverse=True)
+        rprt.append('# '+', '.join([t[0] for t in sorted_tuples[:10]]))
         rprt.append('')
 
         # date range: 06. February - 12. February 2019
