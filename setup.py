@@ -20,6 +20,8 @@ setup(
         'requests',
         'urllib3',
         'rake-nltk',
+        'tqdm',
+        'click',
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',

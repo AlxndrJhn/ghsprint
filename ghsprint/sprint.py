@@ -8,7 +8,6 @@ from typing import List, Tuple, TypeVar
 from dateutil.relativedelta import WE, relativedelta
 from rake_nltk import Rake
 from tqdm import tqdm
-from gensim.summarization.summarizer import summarize
 
 from .board_card import Card
 from .ghdriver import GithubHelper

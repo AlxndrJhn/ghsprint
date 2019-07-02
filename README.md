@@ -19,7 +19,7 @@ python -m ghsprint --special-tags "on hold" --ignore-columns "Product Backlog" -
 ### Arguments
 `access-token` is a [personal access-token from GitHub](https://github.com/settings/tokens), `ghsprint` requires only access to 'repo'
 
-`project-id` is the project number, this will be fetched at stories are detected for the sprint. At the moment the number is only accessible through the [Github API Projects endpoint](https://developer.github.com/v3/projects/#list-repository-projects)
+`project-name` is the project number, this will be fetched at stories are detected for the sprint. At the moment the number is only accessible through the [Github API Projects endpoint](https://developer.github.com/v3/projects/#list-repository-projects)
 
 `repos` is space-separated list of owner/repository pairs, all pull-requests from this repositories will be considered for the sprint report. Example: `myownName/myRepo someOrganization/some_service`.
 
