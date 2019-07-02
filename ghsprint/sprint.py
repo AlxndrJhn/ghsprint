@@ -171,10 +171,10 @@ class Sprint(object):
         # total
         self.logger.info('total time:\t{:.1f}s'.format(time() - start_0))
 
-        self.set_pokered_leftovers(all_cards)
-        self.set_pokered(all_cards)
-        self.set_repokered(all_cards)
-        self.set_unchanged_stories(all_cards)
+        self.set_pokered_leftovers(cards_with_issues)
+        self.set_pokered(cards_with_issues)
+        self.set_repokered(cards_with_issues)
+        self.set_unchanged_stories(cards_with_issues)
         self.prs = pull_requests
         self.set_PRs_without_stories(pull_requests)
 

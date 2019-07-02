@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 setup(
     name='ghsprint',
     packages=['ghsprint'],
-    version='0.3',
+    version='0.5',
     license='GNU GPLv3',
     description='Contains utilities for agile sprints that use the GitHub platform.',
     long_description=long_description,
@@ -14,7 +14,7 @@ setup(
     author='Alexander Jahn',
     author_email='jahn.alexander@gmail.com',
     url='https://github.com/AlxndrJhn/ghsprint',
-    download_url='https://github.com/AlxndrJhn/ghsprint/archive/0.1.tar.gz',
+    download_url='https://github.com/AlxndrJhn/ghsprint/archive/0.5.tar.gz',
     keywords=['GitHub', 'utilities', 'reporting', 'sprint'],
     install_requires=[
         'requests',
@@ -24,7 +24,7 @@ setup(
         'click',
     ],
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
 
         'Intended Audience :: Developers',
         'Topic :: Utilities',

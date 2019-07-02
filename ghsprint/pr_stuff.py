@@ -24,6 +24,12 @@ class PR(object):
         self.merge_commit_sha = pr_dict['merge_commit_sha']
         self.user_name = pr_dict['user']['login']
 
+        self.labels = []
+        self.deletions = None
+        self.additions = None
+        self.changed_files = None
+        self.is_draft = False
+
         self.closes = []
         closes_lines = [line.strip() for line in pr_dict['body'].lower().split('\r\n') if line.startswith('- closes ')]
         if len(closes_lines) > 0:
