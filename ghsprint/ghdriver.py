@@ -129,6 +129,8 @@ class GithubHelper(object):
             pr = PR(repo, r.json())
             revs = self.fetch_PR_reviews(pr)
             pr.add_reviews(revs)
+            data = self.fetch_PR_data(pr)
+            pr.update(data)
             return pr
         raise ValueError('invalid PR request for {}/{} #{}'.format(repo.owner, repo.name, pr_num))
 
